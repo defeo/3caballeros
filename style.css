@@ -55,9 +55,9 @@ body {
       border-bottom: 1px solid #999; }
       #menu #characters li.muted {
         color: #ddd; }
-      #menu #characters li.novoices {
+      #menu #characters li .novoices {
         color: red; }
-        #menu #characters li.novoices:after {
+        #menu #characters li .novoices:after {
           font-size: 70%;
           font-weight: normal;
           content: "no voices for lang " attr(data-lang); }
