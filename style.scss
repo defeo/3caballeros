@@ -1,0 +1,110 @@
+body {
+    max-width: 600px;
+    margin:auto;
+    padding: 0 2px;
+    font-family: sans-serif;
+    font-size: 18px;
+    counter-reset: numero;
+}
+
+#menu {
+    position: fixed;
+    top: 0;
+    width: 100%;
+    max-width: 600px;
+    max-height: 2em;
+    display: flex;
+    flex-flow: row-reverse wrap;
+    justify-content: space-between;
+    background-color: rgba(255,255,255,0.8);
+    overflow-y: hidden;
+
+    &.toggled {
+	max-height: 100%;
+    }
+    
+    #startstop,
+    #toggle {
+	border: solid thin black;
+	border-radius: 3px;
+	width: 1.3em;
+	height: 1.3em;
+	text-align: center;
+	margin: 0.3em 4px;
+	background-color: white;
+	cursor: pointer;
+	&:hover {
+	    box-shadow: 0 0 4px #bbb;
+	}
+    }
+    #toggle:before { content: "|||"; }
+    #startstop:before {
+	content: "▶";
+    }
+    #startstop.playing:before {
+	content: "■";
+    }
+    
+    #characters {
+	list-style-type: none;
+	margin: 0;
+	padding: 0;
+	width: 100%;
+	overflow-y: auto;
+	background-color: #fff;
+	
+	li {
+	    display: flex;
+	    justify-content: space-between;
+	    padding: 4px;
+	    margin: 2px;
+	    font-weight: bold;
+	    border-bottom: 1px solid #999;
+	    &.muted {
+		color: #ddd;
+	    }
+	    &.novoices {
+		color: red;
+		&:after {
+		    font-size: 70%;
+		    font-weight: normal;
+		    content: "no voices for lang " attr(data-lang);
+		}
+	    }
+	}
+    }
+}
+
+#play {
+    margin-top: 3em;
+    
+    h2 {
+	font-size: 110%;
+	margin: 2em 0;
+	&:before {
+	    counter-increment: numero;
+	    content: counter(numero) ". ";
+	    font-size: 90%;
+	    font-style: italic;
+	}
+    }
+	
+    p{
+	transition: background-color 0.5s;
+	&.speaking {
+	    background-color: #eee;
+	}
+    }
+
+    p[data-character]:before {
+	font-weight: bold;
+	font-size: 90%;
+	content: attr(data-character) " – ";
+    }
+    p:not([data-character]), .mood {
+	font-style: italic;
+	font-size: 90%;
+	&:before { content: "(" }
+	&:after { content: ")" }
+    }
+}

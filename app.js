@@ -31,6 +31,114 @@ Element.prototype.append = function(jade, ns) {
 Element.prototype.$ = Element.prototype.querySelector;
 Element.prototype.$$ = Element.prototype.querySelectorAll;
 
+class Character {
+    constructor(name, lang, voice, volume) {
+	this.name = name;
+	this.lang = lang;
+	this.voice = voice;
+	this.volume = volume === undefined ? 1 : volume;
+	this.pronounced = new SpeechSynthesisUtterance(name);
+    }
+
+    render() {
+	let li = document.createElement('li');
+	li.dataset.name = this.name;
+	li.dataset.lang = this.lang;
+	li.append('span ' + this.name);
+	let vol = li.append('input.volume');
+	vol.type = "range";
+	vol.min = "0.01";
+	vol.max = "1.0";
+	vol.step = "0.01";
+	vol.value = "1";
+	vol.addEventListener('change', () => {
+	    this.volume = parseFloat(vol.value);
+	    if (this.muted()) {
+		li.classList.add('muted');
+	    } else {
+		li.classList.remove('muted');
+	    }
+	    this.pronounce();
+	});
+	
+	let voice = li.append('select.voice');
+	let updateVoices = () => {
+	    this.voices = speechSynthesis.getVoices().filter((v) => v.lang == this.lang);
+	    voice.innerHTML = '';
+	    this.voices.forEach((v, i) => {
+		let opt = voice.append('option');
+		opt.value = i;
+		opt.textContent = `${v.name} (${v.lang})`;
+	    });
+	    if (this.voices.length) {
+		li.classList.remove('novoices');
+	    } else {
+		li.classList.add('novoices');
+	    }
+	}
+	speechSynthesis.addEventListener('voiceschanged', updateVoices);
+	updateVoices();
+	voice.addEventListener('select', () => {
+	    this.voice = this.voices[voice.value];
+	    this.pronounce();
+	});
+	return li;
+    }
+
+    muted() {
+	return this.volume <= 0.01;
+    }
+    
+    speak(utterance) {
+	utterance.voice = this.voice;
+	utterance.volume = this.volume;
+	return new Promise((resolve, reject) => {
+	    console.log(utterance);
+	    speechSynthesis.speak(utterance);
+	    utterance.onend = resolve;
+	});
+    }
+
+    pronounce() {
+	this.speak(this.pronounced);
+    }
+}
+
+class Sentence {
+    constructor(text, characters, domNode) {
+	this.text = text;
+	this.characters = characters;
+	this.domNode = domNode;
+	this.utterance = new SpeechSynthesisUtterance(text);
+    }
+
+    chain(next) {
+	this.next = next;
+    }
+    
+    speak(token) {
+	if (token.playing) {
+	    let char = this.characters.find((c) => !c.muted()) || this.characters[0];
+	    this.domNode.classList.add('speaking');
+	    window.scrollTo(0, this.domNode.getBoundingClientRect().top
+			    + window.pageYOffset - (window.innerHeight / 2));
+	    return timeout(500)
+		.then(() => char.speak(this.utterance))
+		.then(() => {
+		    this.domNode.classList.remove('speaking');
+		    return timeout(500)
+		})
+		.then(() => this.next && this.next.speak(token));
+	}
+    }
+}
+
+function timeout(timeout) {
+    return new Promise((resolve, reject) => {
+	setTimeout(() => resolve(), timeout);
+    });
+}
+
 fetch('aventuriers-synopsis.xml')
     .then((res) => res.text())
     .then((text) => {
@@ -41,10 +149,14 @@ fetch('aventuriers-synopsis.xml')
 	let parser = new DOMParser();
 	let xml = parser.parseFromString(text, "application/xml").children[0];
 	let lang = xml.getAttribute('lang');
-	document.body.append("h1 " + xml.$('title').textContent);
-	let chars = document.body.append("ul#characters");
+	document.title += " · " + xml.$('title').textContent;
+	let menu = document.body.append("div#menu");
+	menu.append('div#toggle').onclick = (e) => menu.classList.toggle('toggled');
+	let start = menu.append('div#startstop');
+	
 	let play = document.body.append("div#play");
-
+	play.append("h1 " + xml.$('title').textContent);
+	
 	characters = {};
 	sentences = [];
 
@@ -64,36 +176,35 @@ fetch('aventuriers-synopsis.xml')
 			console.log('wtf:', node);
 		    }
 		}
+		
 		if (c) {
 		    let cs = c.split(',');
 		    p.dataset.character = cs.join(', ');
-		    let sentence = {
-			text: text,
-			speech: new SpeechSynthesisUtterance(text),
-			characters: cs,
-			paragraph: p,
-		    };
-		    sentence.speech.onend = (e) =>
-			sentence.next && speechSynthesis.speak(sentence.next.speech);
+		    let chars = cs.map((c) => 
+				       characters[c]
+				       || (characters[c] = new Character(c, lang)));
+		    let sentence = new Sentence(text, chars, p);
 		    if (sentences.length > 0)
-			sentences[sentences.length-1].next = sentence;
+			sentences[sentences.length-1].chain(sentence);
 		    sentences.push(sentence);
-		    cs.forEach((c) => characters[c] = {
-			name: c,
-			sentence: sentence,
-		    });
 		}
 	    }
 	}
 
+	let chars = menu.append('ul#characters');
 	for (let c in characters) {
-	    let li = chars.append('li ' + c);
-	    li.dataset.character = c;
-	    li.addEventListener('click', (e) => li.classList.toggle('muted'));
+	    chars.appendChild(characters[c].render());
 	}
 
-	play.addEventListener('click', (e) => {
-	    if (!speechSynthesis.speaking)
-		speechSynthesis.speak(sentences[0].speech);
+	let token = {};
+	start.addEventListener('click', (e) => {
+	    if (!token.playing) {
+		token = { playing: true };
+		start.classList.add('playing');
+		sentences[0].speak(token);		
+	    } else {
+		token.playing = false;
+		start.classList.remove('playing');
+	    }
 	});
     });
