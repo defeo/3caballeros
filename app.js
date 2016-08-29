@@ -31,13 +31,51 @@ Element.prototype.append = function(jade, ns) {
 Element.prototype.$ = Element.prototype.querySelector;
 Element.prototype.$$ = Element.prototype.querySelectorAll;
 
+class Voices {
+    constructor(lang) {
+	this.lang = lang;
+	this.selected = null;
+
+ 	this.domNode = document.createElement('select');
+	this.domNode.classList.add('voice');
+	this.domNode.addEventListener('change', () => {
+	    this.selected = this.voices[this.domNode.value];
+	    this.onselected && this.onselected(this.selected);
+	});
+	
+ 	this.updateVoices();
+	speechSynthesis.addEventListener('voiceschanged', this.updateVoices.bind(this));
+   }
+
+    updateVoices() {
+	this.voices = speechSynthesis.getVoices().filter((v) => v.lang == this.lang);
+	this.domNode.innerHTML = "";
+	this.voices.forEach((v, i) => {
+	    let opt = this.domNode.append('option');
+	    opt.value = i;
+	    opt.textContent = `${v.name} (${v.lang})`;
+	    if (this.selected == v)
+		opt.selected = true;
+	});
+	if (this.voices.length > 0) {
+	    this.domNode.classList.remove('novoices');
+	    if (this.selected === null)
+		this.selected = this.voices[0];
+	} else {
+	    this.domNode.classList.add('novoices');
+	    this.selected = null;
+	}
+    }
+}
+
 class Character {
-    constructor(name, lang, voice, volume) {
+    constructor(name, lang, volume) {
 	this.name = name;
 	this.lang = lang;
-	this.voice = voice;
 	this.volume = volume === undefined ? 1 : volume;
 	this.pronounced = new SpeechSynthesisUtterance(name);
+	this.voice = new Voices(lang);
+	this.voice.onselected = () => this.pronounce();
     }
 
     render() {
@@ -60,28 +98,8 @@ class Character {
 	    }
 	    this.pronounce();
 	});
-	
-	let voice = li.append('select.voice');
-	let updateVoices = () => {
-	    this.voices = speechSynthesis.getVoices().filter((v) => v.lang == this.lang);
-	    voice.innerHTML = '';
-	    this.voices.forEach((v, i) => {
-		let opt = voice.append('option');
-		opt.value = i;
-		opt.textContent = `${v.name} (${v.lang})`;
-	    });
-	    if (this.voices.length) {
-		li.classList.remove('novoices');
-	    } else {
-		li.classList.add('novoices');
-	    }
-	}
-	speechSynthesis.addEventListener('voiceschanged', updateVoices);
-	updateVoices();
-	voice.addEventListener('select', () => {
-	    this.voice = this.voices[voice.value];
-	    this.pronounce();
-	});
+
+	li.appendChild(this.voice.domNode);
 	return li;
     }
 
@@ -90,7 +108,7 @@ class Character {
     }
     
     speak(utterance) {
-	utterance.voice = this.voice;
+	utterance.voice = this.voice.selected;
 	utterance.volume = this.volume;
 	return new Promise((resolve, reject) => {
 	    console.log(utterance);

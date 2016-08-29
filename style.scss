@@ -63,7 +63,7 @@ body {
 	    &.muted {
 		color: #ddd;
 	    }
-	    &.novoices {
+	    .novoices {
 		color: red;
 		&:after {
 		    font-size: 70%;
