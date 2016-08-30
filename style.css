@@ -62,30 +62,34 @@ body {
           font-weight: normal;
           content: "no voices for lang " attr(data-lang); }
 
-#play {
+.play {
   margin-top: 3em; }
-  #play h2 {
+  .play h2 {
     font-size: 110%;
     margin: 2em 0; }
-    #play h2:before {
+    .play h2:before {
       counter-increment: numero;
       content: counter(numero) ". ";
       font-size: 90%;
       font-style: italic; }
-  #play p {
+  .play p {
     transition: background-color 0.5s; }
-    #play p.speaking {
+    .play p.speaking {
       background-color: #eee; }
-  #play p[data-character]:before {
+  .play:not(.playing) {
+    cursor: pointer; }
+    .play:not(.playing) .current {
+      outline: solid thin red; }
+  .play p[data-character]:before {
     font-weight: bold;
     font-size: 90%;
     content: attr(data-character) " – "; }
-  #play p:not([data-character]), #play .mood {
+  .play p:not([data-character]), .play .mood {
     font-style: italic;
     font-size: 90%; }
-    #play p:not([data-character]):before, #play .mood:before {
+    .play p:not([data-character]):before, .play .mood:before {
       content: "("; }
-    #play p:not([data-character]):after, #play .mood:after {
+    .play p:not([data-character]):after, .play .mood:after {
       content: ")"; }
 
 /*# sourceMappingURL=style.css.map */
