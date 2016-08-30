@@ -114,6 +114,7 @@ class Character {
 	    console.log(utterance);
 	    speechSynthesis.speak(utterance);
 	    utterance.onend = resolve;
+	    utterance.onerror = reject;
 	});
     }
 
@@ -129,24 +130,118 @@ class Sentence {
 	this.domNode = domNode;
 	this.utterance = new SpeechSynthesisUtterance(text);
     }
+    
+    speak() {
+	let char = this.characters.find((c) => !c.muted()) || this.characters[0];
+	this.domNode.classList.add('speaking');
+	window.scrollTo(0, this.domNode.getBoundingClientRect().top
+			+ window.pageYOffset - (window.innerHeight / 2));
+	return timeout(500)
+	    .then(() => char.speak(this.utterance))
+	    .then(() => {
+		this.domNode.classList.remove('speaking');
+		return timeout(500)
+	    });
+    }
+}
 
-    chain(next) {
-	this.next = next;
+class Play {
+    constructor(doc) {
+	this.document = doc;
+	this.title = doc.$('title').textContent;
+	this.lang = doc.getAttribute('lang');
+	this.sentences = [];
+	this.characters = {};
+	this.playing = false;
+
+	this.domNode = document.createElement('div');
+	this.domNode.className = 'play';
+	this.domNode.append("h1 " + this.title);
+
+	for (let chap of doc.$$('chapter')) {
+	    this.domNode.append('h2 ' + chap.$('title').textContent);
+	    for (let para of chap.$$('para')) {
+		let p = this.domNode.append('p');
+		let c = para.getAttribute('character');
+		let text = '';
+		for (let node of para.childNodes) {
+		    if (node instanceof Text) {
+			p.append('span ' + node.wholeText);
+			text += node.wholeText;
+		    } else if (node.tagName == "mood") {
+			p.append('span.mood ' + node.textContent);
+		    } else {
+			console.log('wtf:', node);
+		    }
+		}
+		
+		if (c) {
+		    let cs = c.split(',');
+		    p.dataset.character = cs.join(', ');
+		    let chars = cs.map((c) => 
+				       this.characters[c]
+				       || (this.characters[c] = new Character(c, this.lang)));
+		    this.sentences.push(new Sentence(text, chars, p));
+		    let i = this.sentences.length - 1;
+		    p.onclick = () => this.select(i);
+		}
+	    }
+	}
+	
+	this.current = -1;
+	this.increaseCurrent();
+    }
+
+    increaseCurrent() {
+	if (this.current >= 0)
+	    this.sentences[this.current].domNode.classList.remove('current');
+	this.current = (this.current + 1) % this.sentences.length;
+	this.sentences[this.current].domNode.classList.add('current');
+	return this.current;
+    }
+
+    select(i) {
+	if (!this.playing && i >=0 && i < this.sentences.length) {
+	    this.sentences[this.current].domNode.classList.remove('current');
+	    this.current = i;
+	    this.sentences[this.current].domNode.classList.add('current');
+	}
     }
     
-    speak(token) {
-	if (token.playing) {
-	    let char = this.characters.find((c) => !c.muted()) || this.characters[0];
-	    this.domNode.classList.add('speaking');
-	    window.scrollTo(0, this.domNode.getBoundingClientRect().top
-			    + window.pageYOffset - (window.innerHeight / 2));
-	    return timeout(500)
-		.then(() => char.speak(this.utterance))
-		.then(() => {
-		    this.domNode.classList.remove('speaking');
-		    return timeout(500)
-		})
-		.then(() => this.next && this.next.speak(token));
+    play() {
+	return new Promise((resolve, reject) => {
+	    if (!this.playing) {
+		this.playing = true;
+		this.domNode.classList.add('playing');
+		let go = () => {
+		    return this.sentences[this.current].speak()
+			.then(() => {
+			    if (this.playing && this.increaseCurrent() > 0)
+				return go();
+			    else {
+				this.playing = false;
+				this.domNode.classList.remove('playing');
+				return resolve();
+			    }
+			})
+			.catch((e) => {
+			    console.log(e);
+			    this.playing = false;
+			    this.domNode.classList.remove('playing');
+			    return reject(e);
+			});
+		};
+		return go();
+	    } else {
+		return reject(new Error("Already playing"));
+	    }
+	});
+    }
+    
+    pause() {
+	if (this.playing) {
+	    speechSynthesis.cancel();
+	    this.playing = false;
 	}
     }
 }
@@ -165,64 +260,30 @@ fetch('aventuriers-synopsis.xml')
 	let append = (elt, tag) => elt.appendChild(document.createElement(tag));
 
 	let parser = new DOMParser();
-	let xml = parser.parseFromString(text, "application/xml").children[0];
-	let lang = xml.getAttribute('lang');
-	document.title += " · " + xml.$('title').textContent;
+
 	let menu = document.body.append("div#menu");
 	menu.append('div#toggle').onclick = (e) => menu.classList.toggle('toggled');
 	let start = menu.append('div#startstop');
 	
-	let play = document.body.append("div#play");
-	play.append("h1 " + xml.$('title').textContent);
-	
-	characters = {};
-	sentences = [];
-
-	for (let chap of xml.$$('chapter')) {
-	    play.append('h2 ' + chap.$('title').textContent);
-	    for (let para of chap.$$('para')) {
-		let p = play.append('p');
-		let c = para.getAttribute('character');
-		let text = '';
-		for (let node of para.childNodes) {
-		    if (node instanceof Text) {
-			p.append('span ' + node.wholeText);
-			text += node.wholeText;
-		    } else if (node.tagName == "mood") {
-			p.append('span.mood ' + node.textContent);
-		    } else {
-			console.log('wtf:', node);
-		    }
-		}
-		
-		if (c) {
-		    let cs = c.split(',');
-		    p.dataset.character = cs.join(', ');
-		    let chars = cs.map((c) => 
-				       characters[c]
-				       || (characters[c] = new Character(c, lang)));
-		    let sentence = new Sentence(text, chars, p);
-		    if (sentences.length > 0)
-			sentences[sentences.length-1].chain(sentence);
-		    sentences.push(sentence);
-		}
-	    }
-	}
+	let xml = parser.parseFromString(text, "application/xml").children[0];
+	let play = new Play(xml);
+	document.body.appendChild(play.domNode);
+	document.title += " · " + play.title;
 
 	let chars = menu.append('ul#characters');
-	for (let c in characters) {
-	    chars.appendChild(characters[c].render());
+	for (let c in play.characters) {
+	    chars.appendChild(play.characters[c].render());
 	}
 
-	let token = {};
 	start.addEventListener('click', (e) => {
-	    if (!token.playing) {
-		token = { playing: true };
-		start.classList.add('playing');
-		sentences[0].speak(token);		
-	    } else {
-		token.playing = false;
+	    if (play.playing) {
 		start.classList.remove('playing');
+		play.pause();
+	    } else {
+		start.classList.add('playing');
+		play.play()
+		    .then(() => start.classList.remove('playing'))
+		    .catch((e) => console.log(e));
 	    }
 	});
     });

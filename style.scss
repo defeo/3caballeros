@@ -75,7 +75,7 @@ body {
     }
 }
 
-#play {
+.play {
     margin-top: 3em;
     
     h2 {
@@ -93,6 +93,13 @@ body {
 	transition: background-color 0.5s;
 	&.speaking {
 	    background-color: #eee;
+	}
+    }
+
+    &:not(.playing) {
+	cursor: pointer;
+	.current {
+	    outline: solid thin red;
 	}
     }
 
